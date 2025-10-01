@@ -54,37 +54,56 @@ def create_payment_intent(request):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Create PaymentIntent
-        intent = stripe.PaymentIntent.create(
-            amount=int(amount),
-            currency='usd',
-            metadata={
-                'appointment_id': appointment_id,
-                'provider_name': appointment.provider_name,
-                'client_email': appointment.client_email
-            },
-            automatic_payment_methods={'enabled': True}
+        # Check if we're using real Stripe keys or mock mode
+        is_mock_mode = (
+            settings.STRIPE_SECRET_KEY.startswith('sk_test_51234') or
+            'test' not in settings.STRIPE_SECRET_KEY.lower()
         )
         
-        # Update appointment with PaymentIntent ID
-        appointment.stripe_payment_intent_id = intent.id
-        appointment.save()
-        
-        return Response({
-            'client_secret': intent.client_secret,
-            'payment_intent_id': intent.id,
-            'amount': amount
-        })
+        if is_mock_mode:
+            # Mock PaymentIntent for demonstration
+            mock_intent_id = f"pi_mock_{appointment_id}_{int(amount)}"
+            mock_client_secret = f"{mock_intent_id}_secret_mock"
+            
+            # Update appointment with mock PaymentIntent ID
+            appointment.stripe_payment_intent_id = mock_intent_id
+            appointment.save()
+            
+            return Response({
+                'client_secret': mock_client_secret,
+                'payment_intent_id': mock_intent_id,
+                'amount': amount,
+                'mock_mode': True,
+                'message': 'Using mock Stripe integration for demonstration'
+            })
+        else:
+            # Real Stripe PaymentIntent
+            intent = stripe.PaymentIntent.create(
+                amount=int(amount),
+                currency='usd',
+                metadata={
+                    'appointment_id': appointment_id,
+                    'provider_name': appointment.provider_name,
+                    'client_email': appointment.client_email
+                },
+                automatic_payment_methods={'enabled': True}
+            )
+            
+            # Update appointment with PaymentIntent ID
+            appointment.stripe_payment_intent_id = intent.id
+            appointment.save()
+            
+            return Response({
+                'client_secret': intent.client_secret,
+                'payment_intent_id': intent.id,
+                'amount': amount,
+                'mock_mode': False
+            })
         
     except Exception as e:
         return Response(
             {'error': f'Stripe error: {str(e)}'}, 
             status=status.HTTP_400_BAD_REQUEST
-        )
-    except Exception as e:
-        return Response(
-            {'error': f'Server error: {str(e)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
