@@ -76,7 +76,7 @@ def create_payment_intent(request):
             'amount': amount
         })
         
-    except stripe.error.StripeError as e:
+    except Exception as e:
         return Response(
             {'error': f'Stripe error: {str(e)}'}, 
             status=status.HTTP_400_BAD_REQUEST
@@ -130,7 +130,7 @@ def confirm_payment(request):
             'appointment': AppointmentSerializer(appointment).data
         })
         
-    except stripe.error.StripeError as e:
+    except Exception as e:
         return Response(
             {'error': f'Stripe error: {str(e)}'}, 
             status=status.HTTP_400_BAD_REQUEST
