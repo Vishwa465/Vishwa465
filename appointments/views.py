@@ -120,9 +120,6 @@ def confirm_payment(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Retrieve PaymentIntent from Stripe
-        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        
         # Find appointment by PaymentIntent ID
         try:
             appointment = Appointment.objects.get(
@@ -134,30 +131,44 @@ def confirm_payment(request):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Update appointment based on payment status
-        if intent.status == 'succeeded':
+        # Check if we're using mock mode
+        is_mock_mode = payment_intent_id.startswith('pi_mock_')
+        
+        if is_mock_mode:
+            # Mock successful payment confirmation
             appointment.payment_status = 'paid'
-        elif intent.status in ['requires_payment_method', 'requires_confirmation']:
-            appointment.payment_status = 'pending'
+            appointment.save()
+            
+            return Response({
+                'status': appointment.payment_status,
+                'appointment': AppointmentSerializer(appointment).data,
+                'mock_mode': True,
+                'message': 'Payment confirmed using mock Stripe integration'
+            })
         else:
-            appointment.payment_status = 'failed'
-        
-        appointment.save()
-        
-        return Response({
-            'status': appointment.payment_status,
-            'appointment': AppointmentSerializer(appointment).data
-        })
+            # Real Stripe PaymentIntent retrieval
+            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+            
+            # Update appointment based on payment status
+            if intent.status == 'succeeded':
+                appointment.payment_status = 'paid'
+            elif intent.status in ['requires_payment_method', 'requires_confirmation']:
+                appointment.payment_status = 'pending'
+            else:
+                appointment.payment_status = 'failed'
+            
+            appointment.save()
+            
+            return Response({
+                'status': appointment.payment_status,
+                'appointment': AppointmentSerializer(appointment).data,
+                'mock_mode': False
+            })
         
     except Exception as e:
         return Response(
             {'error': f'Stripe error: {str(e)}'}, 
             status=status.HTTP_400_BAD_REQUEST
-        )
-    except Exception as e:
-        return Response(
-            {'error': f'Server error: {str(e)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
